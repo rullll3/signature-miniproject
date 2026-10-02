@@ -1,133 +1,60 @@
-# Analisis Mini Project
+Analisis
+1. Alasan menggunakan thresholding
 
-## 1. Crop dan grayscale
+Thresholding digunakan untuk memisahkan bagian tanda tangan dari latar belakang kertas. Setelah gambar diubah menjadi grayscale, nilai piksel menjadi lebih sederhana sehingga bagian yang gelap seperti goresan tanda tangan dapat dibedakan dari bagian kertas yang lebih terang.
 
-ROI tanda tangan Dekan menggunakan koordinat:
+Hasil threshold kemudian dapat digunakan untuk menghitung jumlah piksel foreground. Nilai tersebut menjadi dasar untuk menentukan apakah pada area yang diperiksa terdapat tanda tangan atau tidak.
 
-```text
-x1=950, y1=770, x2=1350, y2=875
-```
+2. Perbandingan Global Threshold dan Otsu
 
-Ukuran ROI = `400 x 105` piksel.
+Pada Global Threshold, nilai batas ditentukan secara langsung menggunakan nilai tetap, yaitu 180. Piksel dengan intensitas di bawah batas tersebut dianggap sebagai foreground.
 
-ROI kemudian dikonversi dari RGB/BGR ke grayscale agar proses thresholding
-bekerja pada satu kanal intensitas.
+Sedangkan pada metode Otsu, nilai threshold ditentukan secara otomatis berdasarkan distribusi intensitas pada gambar. Metode ini digunakan agar batas antara foreground dan background dapat menyesuaikan dengan kondisi gambar.
 
-## 2. Perbandingan thresholding
+Dari hasil pengujian, metode Otsu dapat menghasilkan pemisahan tanda tangan dengan baik pada gambar yang memiliki tanda tangan. Untuk kondisi tertentu ketika hasil Otsu menghasilkan jumlah foreground yang tidak sesuai, program menggunakan Global Threshold sebagai fallback.
 
-### Global threshold
+3. Morphological Operation
 
-Digunakan nilai tetap `T=180`.
+Setelah proses thresholding, dilakukan operasi morphology berupa opening dan closing.
 
-Kelebihan: sederhana dan cepat.
+Opening digunakan untuk mengurangi titik-titik kecil atau noise yang masih muncul setelah thresholding. Setelah itu, closing digunakan untuk membantu menyambungkan bagian foreground yang memiliki celah kecil.
 
-Kekurangan: sensitif terhadap perubahan pencahayaan. Pada salah satu citra
-yang jauh lebih gelap, background ikut terdeteksi sebagai foreground dalam
-jumlah sangat besar.
+Dengan proses tersebut, hasil segmentasi menjadi lebih bersih dan bentuk goresan tanda tangan lebih mudah digunakan untuk proses perhitungan.
 
-### Otsu threshold
+4. Analisis Foreground Ratio
 
-Otsu menentukan nilai threshold otomatis dari histogram grayscale. Pada citra
-dengan pencahayaan yang berbeda-beda, metode ini lebih adaptif daripada nilai
-global tetap.
+Program menghitung persentase piksel foreground terhadap seluruh piksel pada area tanda tangan menggunakan rumus:
 
-Contoh threshold Otsu pada data yang diuji berada sekitar `126-202` untuk
-citra bertanda tangan.
+Foreground Ratio = jumlah piksel foreground / jumlah seluruh piksel
 
-## 3. Morphology
+Jika nilai ratio memenuhi batas yang telah ditentukan, yaitu 0,03, maka gambar dikategorikan sebagai:
 
-Urutan yang digunakan:
+SIGNATURE PRESENT
 
-```text
-threshold -> opening -> closing
-```
+Jika nilainya berada di bawah batas tersebut, maka dikategorikan sebagai:
 
-- Opening menghilangkan noise kecil/komponen kecil.
-- Closing menutup celah kecil pada goresan sehingga bentuk tanda tangan lebih
-  utuh.
+SIGNATURE ABSENT
 
-Kernel yang digunakan adalah elliptical `3x3`.
+Pada data pengujian, gambar yang memiliki tanda tangan menghasilkan ratio sekitar 0,0872 sampai 0,1358, sedangkan gambar tanpa tanda tangan menghasilkan ratio 0,0000.
 
-## 4. Karakteristik area
+5. Pengaruh Nilai Threshold
 
-Karakteristik utama yang dihitung adalah:
+Jika nilai threshold terlalu tinggi, lebih banyak bagian background dapat ikut dianggap sebagai foreground. Hal ini dapat membuat jumlah piksel foreground menjadi terlalu besar dan berpotensi menyebabkan gambar tanpa tanda tangan dianggap memiliki tanda tangan.
 
-```text
-foreground_pixels = jumlah piksel bernilai 255
-foreground_ratio = foreground_pixels / jumlah seluruh piksel ROI
-```
+Sebaliknya, jika nilai threshold terlalu rendah, goresan tanda tangan yang tipis atau kurang gelap dapat tidak terdeteksi. Akibatnya jumlah foreground menjadi terlalu sedikit dan gambar yang sebenarnya memiliki tanda tangan dapat dianggap tidak memiliki tanda tangan.
 
-Pada contoh citra bertanda tangan, rasio foreground setelah Otsu + morphology
-berada sekitar 0.09-0.13.
+Oleh karena itu, pemilihan threshold berpengaruh terhadap hasil segmentasi dan keputusan akhir sistem.
 
-Aturan sederhana:
+6. Hasil Pengujian
 
-```text
-foreground_ratio >= 0.03 -> SIGNATURE PRESENT
-foreground_ratio <  0.03 -> SIGNATURE ABSENT
-```
+Pengujian dilakukan menggunakan 18 gambar, terdiri dari 9 gambar dengan tanda tangan dan 9 gambar tanpa tanda tangan.
 
-Nilai `0.03` dipilih sebagai threshold eksperimen untuk ROI yang digunakan.
-Jika ukuran crop, kualitas scanner, atau jenis dokumen berubah, nilai ini perlu
-dikaji ulang.
+Hasil pengujian menunjukkan:
 
-## 5. Masalah Otsu pada ROI kosong
+9 gambar SIGNATURE PRESENT berhasil dikenali sebagai SIGNATURE PRESENT.
+9 gambar SIGNATURE ABSENT berhasil dikenali sebagai SIGNATURE ABSENT.
+Jumlah prediksi benar: 18 dari 18 gambar.
+Accuracy: 100%.
+7. Kesimpulan Analisis
 
-Pada ROI yang hampir seragam, Otsu dapat menghasilkan threshold sangat tinggi.
-Jika binary inverse digunakan, background yang seragam dapat salah dianggap
-sebagai foreground.
-
-Karena itu implementasi memakai pemeriksaan kewajaran hasil Otsu. Jika threshold
-Otsu terlalu tinggi atau foreground hasil Otsu terlalu besar, program memakai
-global threshold sebagai fallback.
-
-Ini penting karena "tidak ada tanda tangan" tidak selalu berarti histogram
-memiliki dua kelompok intensitas yang jelas.
-
-## 6. Jawaban pertanyaan analisis
-
-### Mengapa thresholding diperlukan sebelum analisis keberadaan tanda tangan?
-
-Karena jumlah piksel tinta dan bentuk tanda tangan lebih mudah dianalisis pada
-citra biner. Thresholding memisahkan piksel gelap yang merepresentasikan tinta
-dari background kertas yang relatif terang. Hasilnya dapat dihitung secara
-kuantitatif menggunakan foreground pixel count atau foreground ratio.
-
-### Apa masalah jika threshold terlalu tinggi?
-
-Background, bayangan, tekstur kertas, atau noise dapat ikut menjadi foreground.
-Akibatnya area foreground membesar dan sistem dapat memberikan false positive.
-
-### Apa masalah jika threshold terlalu rendah?
-
-Goresan tanda tangan yang tipis/abu-abu dapat hilang. Area foreground menjadi
-terlalu kecil sehingga sistem dapat memberikan false negative.
-
-## 7. Pengujian
-
-Dataset contoh:
-
-| Kelas | Jumlah | Sumber |
-|---|---:|---|
-| SIGNATURE PRESENT | 5 | citra yang diberikan |
-| SIGNATURE ABSENT | 4 | negative sample sintetis |
-
-Negative sample sintetis dibuat dengan menutupi ROI tanda tangan. Untuk laporan
-akademik, jelaskan hal ini secara eksplisit dan, jika memungkinkan, tambahkan
-beberapa scan asli tanpa tanda tangan sebelum menyatakan performa final sistem.
-
-## 8. Tabel hasil pengujian
-
-| file          | expected          | prediction        |   otsu_threshold |   global_foreground |   otsu_foreground |   selected_foreground |   selected_ratio |
-|:--------------|:------------------|:------------------|-----------------:|--------------------:|------------------:|----------------------:|-----------------:|
-| absent_1.jpg  | SIGNATURE ABSENT  | SIGNATURE ABSENT  |              247 |                   0 |             41495 |                     0 |           0      |
-| absent_2.jpg  | SIGNATURE ABSENT  | SIGNATURE ABSENT  |              244 |                   0 |             41499 |                     0 |           0      |
-| absent_3.jpg  | SIGNATURE ABSENT  | SIGNATURE ABSENT  |              247 |                   0 |             41395 |                     0 |           0      |
-| absent_4.jpg  | SIGNATURE ABSENT  | SIGNATURE ABSENT  |              190 |                   0 |             41494 |                     0 |           0      |
-| present_1.jpg | SIGNATURE PRESENT | SIGNATURE PRESENT |              165 |                4340 |              3771 |                  3771 |           0.0898 |
-| present_2.jpg | SIGNATURE PRESENT | SIGNATURE PRESENT |              195 |                4519 |              5608 |                  5608 |           0.1335 |
-| present_3.jpg | SIGNATURE PRESENT | SIGNATURE PRESENT |              126 |               42000 |              3862 |                  3862 |           0.092  |
-| present_4.jpg | SIGNATURE PRESENT | SIGNATURE PRESENT |              170 |                4234 |              3775 |                  3775 |           0.0899 |
-| present_5.jpg | SIGNATURE PRESENT | SIGNATURE PRESENT |              145 |                7292 |              4228 |                  4228 |           0.1007 |
-
-Pada dataset contoh ini seluruh 9 sampel diklasifikasikan dengan benar (100%). Angka tersebut berlaku hanya untuk dataset mini yang digunakan dan tidak merepresentasikan performa pada dokumen dengan layout, pencahayaan, atau kualitas scan yang berbeda.
+Berdasarkan hasil pengujian, kombinasi grayscale, thresholding, morphology, dan perhitungan foreground ratio dapat digunakan untuk mendeteksi keberadaan tanda tangan pada area yang telah ditentukan. Perbandingan Global Threshold dan Otsu juga membantu memilih hasil segmentasi yang sesuai dengan kondisi gambar. Pada dataset yang digunakan, seluruh gambar berhasil diklasifikasikan dengan benar.
